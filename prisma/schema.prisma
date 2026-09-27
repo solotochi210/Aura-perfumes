@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum StockStatus {
+  IN_STOCK
+  SOLD
+  OUT_OF_STOCK
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FULFILLED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PAYSTACK
+  TRANSFER
+  WHATSAPP
+}
+
+enum DocumentKind {
+  INVOICE
+  RECEIPT
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  price       Int
+  costPrice   Int
+  stockStatus StockStatus @default(IN_STOCK)
+  images      String[]
+  category    String
+  slug        String      @unique
+  sizeMl      Int
+  featured    Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  orderItems  OrderItem[]
+
+  @@index([slug])
+  @@index([stockStatus])
+  @@index([createdAt])
+  @@index([category])
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  publicRef     String        @unique
+  customerName  String
+  customerPhone String
+  customerEmail String
+  totalAmount   Int
+  status        OrderStatus   @default(PENDING)
+  paymentMethod PaymentMethod
+  paystackRef   String?       @unique
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  items         OrderItem[]
+  invoices      Invoice[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([customerPhone])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  unitPrice Int
+  unitCost  Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Invoice {
+  id            String       @id @default(cuid())
+  orderId       String
+  kind          DocumentKind
+  invoiceNumber String       @unique
+  pdfUrl        String?
+  issuedAt      DateTime     @default(now())
+  order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, kind])
+  @@index([invoiceNumber])
+}
+
+model InvoiceSequence {
+  id      String @id @default("default")
+  current Int    @default(1000)
+}
+
+model AdminUser {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  hashedPassword String
+  name           String?
+  createdAt      DateTime @default(now())
+}
+
+model Settings {
+  id              String   @id @default("default")
+  businessName    String   @default("Ojoma")
+  tagline         String   @default("Perfumes composed for quiet luxury")
+  businessEmail   String   @default("")
+  businessPhone   String   @default("")
+  businessAddress String   @default("")
+  bankName        String   @default("")
+  accountName     String   @default("")
+  accountNumber   String   @default("")
+  whatsappNumber  String   @default("")
+  updatedAt       DateTime @updatedAt
+}
+
+model Visit {
+  id        String   @id @default(cuid())
+  path      String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
