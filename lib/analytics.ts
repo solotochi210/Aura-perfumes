@@ -123,6 +123,7 @@ export async function listCustomers() {
       orderCount: number;
       totalSpent: number;
       lastOrderAt: Date;
+      points: number;
     }
   >();
 
@@ -138,6 +139,7 @@ export async function listCustomers() {
         orderCount: 1,
         totalSpent: spent,
         lastOrderAt: order.createdAt,
+        points: 0,
       });
       continue;
     }
@@ -150,5 +152,63 @@ export async function listCustomers() {
     }
   }
 
-  return [...grouped.values()].sort((a, b) => b.totalSpent - a.totalSpent);
+  const saved = await db.customer.findMany({ select: { phone: true, points: true } });
+  const points = new Map(saved.map((customer) => [customer.phone, customer.points]));
+
+  return [...grouped.values()]
+    .map((customer) => ({
+      ...customer,
+      points: points.get(customer.phone.replace(/\D/g, "")) ?? customer.points,
+    }))
+    .sort((a, b) => b.totalSpent - a.totalSpent);
+}
+
+export async function getBusinessReport(period: "day" | "week" | "month") {
+  const now = new Date();
+  const start = new Date(now);
+  if (period === "day") start.setHours(0, 0, 0, 0);
+  else if (period === "week") {
+    start.setDate(now.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+  }
+
+  const orders = await db.order.findMany({
+    where: { status: { in: ["PAID", "FULFILLED"] }, createdAt: { gte: start } },
+    include: {
+      items: {
+        select: {
+          quantity: true,
+          unitPrice: true,
+          unitCost: true,
+          product: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  let revenue = 0;
+  let expenses = 0;
+  const sellers = new Map<string, { name: string; quantity: number; revenue: number }>();
+  for (const order of orders) {
+    revenue += order.totalAmount;
+    for (const item of order.items) {
+      expenses += item.unitCost * item.quantity;
+      const current = sellers.get(item.product.name) ?? { name: item.product.name, quantity: 0, revenue: 0 };
+      current.quantity += item.quantity;
+      current.revenue += item.unitPrice * item.quantity;
+      sellers.set(item.product.name, current);
+    }
+  }
+
+  return {
+    period,
+    orders: orders.length,
+    revenue,
+    expenses,
+    profit: revenue - expenses,
+    bestSellers: [...sellers.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 5),
+  };
 }

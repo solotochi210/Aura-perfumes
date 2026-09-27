@@ -1,7 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { db, withDatabase } from "@/lib/db";
-import { notifyAdminOfOrder, sendOrderMailSafely, sendPaidReceipt } from "@/lib/email";
+import { notifyAdminOfOrder, sendOrderConfirmation, sendOrderMailSafely, sendPaidReceipt } from "@/lib/email";
+import { nextInvoiceNumber } from "@/lib/invoice";
+import { returnStock, takeStock } from "@/lib/inventory";
 import { makePublicRef } from "@/lib/slug";
 import type { CheckoutInput } from "@/lib/validations/checkout";
 import type { PaymentMethod } from "@/lib/constants";
@@ -49,11 +51,17 @@ type AssertNoCost = "unitCost" extends keyof PlacedOrder["items"][number] ? neve
 const _assertNoCost: AssertNoCost = true;
 void _assertNoCost;
 
-export async function createPendingOrder(input: CheckoutInput) {
+export async function createPendingOrder(
+  input: CheckoutInput,
+  extras?: {
+    channel?: "WEBSITE" | "WHATSAPP" | "INSTAGRAM" | "STORE";
+    customerEmail?: string;
+  },
+) {
   const order = await db.$transaction(async (tx) => {
     const ids = input.items.map((item) => item.productId);
     const products = await tx.product.findMany({
-      where: { id: { in: ids }, stockStatus: "IN_STOCK" },
+      where: { id: { in: ids } },
     });
     if (products.length !== new Set(ids).size) {
       throw new Error("One or more perfumes are no longer available.");
@@ -70,8 +78,22 @@ export async function createPendingOrder(input: CheckoutInput) {
         quantity: item.quantity,
         unitPrice: product.price,
         unitCost: product.costPrice,
+        name: product.name,
       };
     });
+
+    const giftCode = input.giftCardCode?.trim();
+    if (giftCode) {
+      const card = await tx.giftCard.findUnique({ where: { code: giftCode.toUpperCase() } });
+      if (!card || card.balance <= 0) throw new Error("That gift card cannot be used.");
+      const discount = Math.min(card.balance, total);
+      const spent = await tx.giftCard.updateMany({
+        where: { id: card.id, balance: { gte: discount } },
+        data: { balance: { decrement: discount } },
+      });
+      if (spent.count !== 1) throw new Error("That gift card cannot be used.");
+      total -= discount;
+    }
 
     if (total > 2_000_000_000) {
       throw new Error("This order total is too large.");
@@ -86,27 +108,89 @@ export async function createPendingOrder(input: CheckoutInput) {
 
     const reference = `ojoma_${crypto.randomUUID().replace(/-/g, "").slice(0, 18)}`;
 
-    return tx.order.create({
+    const created = await tx.order.create({
       data: {
         publicRef,
         customerName: input.customerName,
         customerPhone: input.customerPhone,
-        customerEmail: input.customerEmail.toLowerCase(),
+        customerEmail: (extras?.customerEmail ?? input.customerEmail).toLowerCase(),
         totalAmount: total,
         status: "PENDING",
         paymentMethod: input.paymentMethod,
+        channel: extras?.channel ?? (input.paymentMethod === "WHATSAPP" ? "WHATSAPP" : "WEBSITE"),
         paystackRef: input.paymentMethod === "PAYSTACK" ? reference : null,
-        items: { create: items },
+        items: {
+          create: items.map(({ name: _name, ...item }) => item),
+        },
       },
       include: placedInclude,
     });
+
+    for (const item of items) {
+      await takeStock(tx, item.productId, item.quantity, `Sold ${item.quantity} on ${publicRef}`);
+    }
+
+    return created;
   });
 
-  return { record: order, placed: toPlacedOrder(order) };
+  await rememberCustomer(order);
+  const invoice = await nextInvoiceNumber(order.id, "INVOICE");
+  const placed = toPlacedOrder(order);
+  if (placed.customerEmail) {
+    await sendOrderMailSafely(() => sendOrderConfirmation(placed, invoice.invoiceNumber));
+  }
+  revalidatePath("/shop");
+  revalidatePath("/");
+  return { record: order, placed };
+}
+
+export async function createManualOrder(input: {
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  paymentMethod: PaymentMethod;
+  channel: "WHATSAPP" | "INSTAGRAM" | "STORE";
+  items: { productId: string; quantity: number }[];
+}) {
+  const email = input.customerEmail.trim().toLowerCase();
+  const placed = await createPendingOrder(
+    {
+      customerName: input.customerName,
+      customerPhone: input.customerPhone,
+      customerEmail: email || "orders@auraneessence.com",
+      paymentMethod: input.paymentMethod,
+      items: input.items,
+    },
+    { channel: input.channel, customerEmail: email },
+  );
+  await markOrderPaid(placed.record.id);
+  return placed.record.id;
+}
+
+async function rememberCustomer(order: {
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+}) {
+  const phone = order.customerPhone.replace(/\D/g, "");
+  if (!phone) return;
+  await db.customer.upsert({
+    where: { phone },
+    update: { name: order.customerName, email: order.customerEmail },
+    create: { name: order.customerName, phone, email: order.customerEmail },
+  });
 }
 
 export async function cancelOrder(orderId: string) {
   await db.$transaction(async (tx) => {
+    const existing = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    if (!existing || existing.status === "CANCELLED") return;
+    for (const item of existing.items) {
+      await returnStock(tx, item.productId, item.quantity, `Returned ${item.quantity} from ${existing.publicRef}`);
+    }
     await tx.order.update({
       where: { id: orderId },
       data: { status: "CANCELLED" },
@@ -130,13 +214,34 @@ export async function markOrderPaid(orderId: string) {
       data: { status: "PAID" },
       include: placedInclude,
     });
+    const phone = order.customerPhone.replace(/\D/g, "");
+    if (phone) {
+      const points = Math.floor(order.totalAmount / 10000);
+      await tx.customer.upsert({
+        where: { phone },
+        update: {
+          name: order.customerName,
+          email: order.customerEmail,
+          points: { increment: points },
+        },
+        create: {
+          name: order.customerName,
+          phone,
+          email: order.customerEmail,
+          points,
+        },
+      });
+    }
     return { order, changed: true };
   });
 
   if (!result) return null;
   if (result.changed) {
     const placed = toPlacedOrder(result.order);
-    await sendOrderMailSafely(() => sendPaidReceipt(placed));
+    await sendOrderMailSafely(async () => {
+      const receipt = await nextInvoiceNumber(orderId, "RECEIPT");
+      await sendPaidReceipt(placed, receipt.invoiceNumber);
+    });
     await sendOrderMailSafely(() => notifyAdminOfOrder(placed, "Payment received"));
     revalidatePath("/admin");
     revalidatePath("/admin/orders");

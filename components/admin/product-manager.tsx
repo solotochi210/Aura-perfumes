@@ -78,7 +78,12 @@ export function ProductManager({ products }: { products: EditableProduct[] }) {
                   <p className="font-medium">{product.name}</p>
                   <p className="text-xs text-muted">
                     {product.category} · {product.sizeMl}ml
+                    {product.color ? ` · ${product.color}` : ""}
+                    {product.texture ? ` · ${product.texture}` : ""}
                   </p>
+                  {product.history?.length ? (
+                    <p className="mt-1 text-[11px] text-muted">{product.history[0]}</p>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   <input
@@ -127,6 +132,7 @@ export function ProductManager({ products }: { products: EditableProduct[] }) {
                   </select>
                   <div className="mt-2">
                     <Badge tone={tone[product.stockStatus]}>{STOCK_LABELS[product.stockStatus]}</Badge>
+                    <p className="mt-1 text-xs text-muted">{product.stockQty} on hand</p>
                   </div>
                 </TableCell>
                 <TableCell>

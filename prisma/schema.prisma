@@ -27,6 +27,13 @@ enum PaymentMethod {
   WHATSAPP
 }
 
+enum OrderChannel {
+  WEBSITE
+  WHATSAPP
+  INSTAGRAM
+  STORE
+}
+
 enum DocumentKind {
   INVOICE
   RECEIPT
@@ -43,15 +50,29 @@ model Product {
   category    String
   slug        String      @unique
   sizeMl      Int
+  color       String      @default("")
+  texture     String      @default("")
+  stockQty    Int         @default(10)
   featured    Boolean     @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   orderItems  OrderItem[]
+  history     ProductHistory[]
 
   @@index([slug])
   @@index([stockStatus])
   @@index([createdAt])
   @@index([category])
+}
+
+model ProductHistory {
+  id        String   @id @default(cuid())
+  productId String
+  note      String
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, createdAt])
 }
 
 model Order {
@@ -63,6 +84,7 @@ model Order {
   totalAmount   Int
   status        OrderStatus   @default(PENDING)
   paymentMethod PaymentMethod
+  channel       OrderChannel  @default(WEBSITE)
   paystackRef   String?       @unique
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -104,6 +126,37 @@ model Invoice {
 model InvoiceSequence {
   id      String @id @default("default")
   current Int    @default(1000)
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  email     String   @default("")
+  points    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model GiftCard {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  balance   Int
+  initial   Int
+  note      String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Campaign {
+  id             String   @id @default(cuid())
+  channel        String
+  segment        String
+  subject        String
+  message        String
+  recipientCount Int
+  createdAt      DateTime @default(now())
 }
 
 model AdminUser {

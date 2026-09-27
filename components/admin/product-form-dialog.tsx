@@ -28,10 +28,14 @@ export type EditableProduct = {
   price: number;
   costPrice: number;
   stockStatus: StockStatus;
+  stockQty: number;
+  color: string;
+  texture: string;
   images: string[];
   category: string;
   sizeMl: number;
   featured: boolean;
+  history?: string[];
 };
 
 export function ProductFormDialog({
@@ -71,8 +75,11 @@ function ProductForm({
       description: product?.description ?? "",
       priceNaira: product ? koboToNaira(product.price) : 0,
       costPriceNaira: product ? koboToNaira(product.costPrice) : 0,
-      stockStatus: product?.stockStatus ?? "IN_STOCK",
-      images: product?.images ?? [],
+          stockStatus: product?.stockStatus ?? "IN_STOCK",
+          stockQty: product?.stockQty ?? 10,
+          color: product?.color ?? "",
+          texture: product?.texture ?? "",
+          images: product?.images ?? [],
       category: product?.category ?? CATEGORIES[0],
       sizeMl: product?.sizeMl ?? 50,
       featured: product?.featured ?? false,
@@ -120,6 +127,15 @@ function ProductForm({
         </Field>
         <Field label="Size (ml)" error={form.formState.errors.sizeMl?.message}>
           <Input type="number" {...form.register("sizeMl", { valueAsNumber: true })} />
+        </Field>
+        <Field label="Colour" error={form.formState.errors.color?.message}>
+          <Input {...form.register("color")} placeholder="Optional" />
+        </Field>
+        <Field label="Texture" error={form.formState.errors.texture?.message}>
+          <Input {...form.register("texture")} placeholder="Optional, such as oil or spray" />
+        </Field>
+        <Field label="Stock on hand" error={form.formState.errors.stockQty?.message}>
+          <Input type="number" {...form.register("stockQty", { valueAsNumber: true })} />
         </Field>
       </div>
       <Field label="Stock" error={form.formState.errors.stockStatus?.message}>

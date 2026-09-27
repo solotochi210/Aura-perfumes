@@ -12,6 +12,9 @@ export const productFormSchema = z.object({
   priceNaira: money,
   costPriceNaira: z.number().nonnegative("Cost cannot be negative.").max(2_000_000),
   stockStatus: z.enum(["IN_STOCK", "SOLD", "OUT_OF_STOCK"]),
+  stockQty: z.number().int().nonnegative("Stock cannot be negative.").max(100000),
+  color: z.string().trim().max(40).optional(),
+  texture: z.string().trim().max(40).optional(),
   images: z
     .array(
       z

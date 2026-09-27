@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
+import { ManualOrderForm } from "@/components/admin/manual-order-form";
 import { OrderFilters } from "@/components/admin/order-filters";
 import { ORDER_STATUS_LABELS, PAYMENT_LABELS, type OrderStatus, type PaymentMethod } from "@/lib/constants";
 import { formatDate, formatNaira } from "@/lib/money";
@@ -35,14 +36,21 @@ export default async function OrdersPage({
   if (from) createdAt.gte = new Date(`${from}T00:00:00`);
   if (to) createdAt.lte = new Date(`${to}T23:59:59`);
 
-  const orders = await db.order.findMany({
-    where: {
-      ...(statusFilter ? { status: statusFilter } : {}),
-      ...(from || to ? { createdAt } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
+  const [orders, products] = await Promise.all([
+    db.order.findMany({
+      where: {
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(from || to ? { createdAt } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    }),
+    db.product.findMany({
+      where: { stockStatus: { not: "SOLD" }, stockQty: { gt: 0 } },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, stockQty: true },
+    }),
+  ]);
 
   return (
     <div>
@@ -53,6 +61,7 @@ export default async function OrdersPage({
       <Suspense fallback={null}>
         <OrderFilters />
       </Suspense>
+      <ManualOrderForm products={products} />
       {orders.length === 0 ? (
         <p className="border border-dashed border-line px-6 py-16 text-center text-sm text-muted">
           No orders in this view.
@@ -65,6 +74,7 @@ export default async function OrdersPage({
               <TableHead>Customer</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Payment</TableHead>
+              <TableHead>Source</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Date</TableHead>
             </TableRow>
@@ -83,6 +93,7 @@ export default async function OrdersPage({
                 </TableCell>
                 <TableCell>{formatNaira(order.totalAmount)}</TableCell>
                 <TableCell>{PAYMENT_LABELS[order.paymentMethod as PaymentMethod]}</TableCell>
+                <TableCell className="text-xs uppercase tracking-[0.12em]">{order.channel}</TableCell>
                 <TableCell>
                   <Badge>{ORDER_STATUS_LABELS[order.status as OrderStatus]}</Badge>
                 </TableCell>

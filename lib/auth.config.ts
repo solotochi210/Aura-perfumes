@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import type { NextAuthConfig } from "next-auth";
 import { isConfiguredAdmin } from "@/lib/admin-identity";
 
+const authUrl = process.env.AUTH_URL ?? "";
+if (
+  process.env.VERCEL &&
+  (!authUrl || authUrl.includes("localhost") || authUrl.includes("127.0.0.1"))
+) {
+  delete process.env.AUTH_URL;
+}
+
 export const authConfig = {
   trustHost: true,
   pages: {

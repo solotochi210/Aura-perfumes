@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RevenueChart } from "@/components/admin/revenue-chart";
-import { getDashboardMetrics } from "@/lib/analytics";
+import { getBusinessReport, getDashboardMetrics } from "@/lib/analytics";
 import { STARTER_HOUSE } from "@/lib/constants";
 import { getPublicSettings } from "@/lib/settings";
 import { ORDER_STATUS_LABELS, PAYMENT_LABELS, type OrderStatus } from "@/lib/constants";
@@ -16,8 +16,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export default async function DashboardPage() {
-  const [metrics, settings] = await Promise.all([getDashboardMetrics(), getPublicSettings()]);
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const periodParam = Array.isArray(params.period) ? params.period[0] : params.period;
+  const period = periodParam === "day" || periodParam === "week" ? periodParam : "month";
+  const [metrics, settings, report] = await Promise.all([
+    getDashboardMetrics(),
+    getPublicSettings(),
+    getBusinessReport(period),
+  ]);
   const usingStarterHouse =
     settings.whatsappNumber === STARTER_HOUSE.whatsappNumber ||
     settings.accountNumber === STARTER_HOUSE.accountNumber;
@@ -61,6 +72,63 @@ export default async function DashboardPage() {
       <section>
         <h2 className="mb-4 font-serif text-2xl">Revenue and profit</h2>
         <RevenueChart data={metrics.trend} />
+      </section>
+      <section>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <h2 className="font-serif text-2xl">Business report</h2>
+          <div className="flex gap-2 text-xs uppercase tracking-[0.14em]">
+            {(
+              [
+                ["day", "Daily"],
+                ["week", "Weekly"],
+                ["month", "Monthly"],
+              ] as const
+            ).map(([value, label]) => (
+              <Link
+                key={value}
+                href={value === "month" ? "/admin" : `/admin?period=${value}`}
+                className={period === value ? "bg-ink px-3 py-2 text-cream" : "border border-line px-3 py-2"}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="p-5">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted">Sales</p>
+            <p className="mt-3 font-serif text-3xl">{formatNaira(report.revenue)}</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted">Expenses</p>
+            <p className="mt-3 font-serif text-3xl">{formatNaira(report.expenses)}</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted">Profit</p>
+            <p className="mt-3 font-serif text-3xl">{formatNaira(report.profit)}</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted">Paid orders</p>
+            <p className="mt-3 font-serif text-3xl">{report.orders}</p>
+          </Card>
+        </div>
+        <div className="mt-4">
+          <h3 className="mb-3 font-serif text-xl">Best sellers</h3>
+          {report.bestSellers.length === 0 ? (
+            <p className="text-sm text-muted">No paid sales in this period.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {report.bestSellers.map((item) => (
+                <li key={item.name} className="flex items-center justify-between border-b border-line py-2">
+                  <span>{item.name}</span>
+                  <span className="text-muted">
+                    {item.quantity} sold · {formatNaira(item.revenue)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
       <section>
         <div className="mb-4 flex items-center justify-between">

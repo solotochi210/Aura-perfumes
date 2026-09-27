@@ -39,11 +39,19 @@ export async function createProduct(input: unknown): Promise<ActionResult> {
           price: nairaToKobo(data.priceNaira),
           costPrice: nairaToKobo(data.costPriceNaira),
           stockStatus: data.stockStatus,
+          stockQty: data.stockQty,
+          color: data.color ?? "",
+          texture: data.texture ?? "",
           images: data.images,
           category: data.category,
           slug,
           sizeMl: data.sizeMl,
           featured: data.featured,
+          history: {
+            create: {
+              note: `Added. Stock ${data.stockQty}. Size ${data.sizeMl}ml${data.color ? ` · ${data.color}` : ""}${data.texture ? ` · ${data.texture}` : ""}.`,
+            },
+          },
         },
       });
     });
@@ -69,10 +77,18 @@ export async function updateProduct(input: unknown): Promise<ActionResult> {
           price: nairaToKobo(data.priceNaira),
           costPrice: nairaToKobo(data.costPriceNaira),
           stockStatus: data.stockStatus,
+          stockQty: data.stockQty,
+          color: data.color ?? "",
+          texture: data.texture ?? "",
           images: data.images,
           category: data.category,
           sizeMl: data.sizeMl,
           featured: data.featured,
+          history: {
+            create: {
+              note: `Updated. Stock ${data.stockQty}. Size ${data.sizeMl}ml${data.color ? ` · ${data.color}` : ""}${data.texture ? ` · ${data.texture}` : ""}.`,
+            },
+          },
         },
       });
     });

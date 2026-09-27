@@ -10,6 +10,7 @@ export const checkoutSchema = z.object({
     .refine((value) => value.replace(/\D/g, "").length >= 8, "Enter a valid phone number."),
   customerEmail: z.email("Enter a valid email address."),
   paymentMethod: z.enum(["PAYSTACK", "TRANSFER", "WHATSAPP"]),
+  giftCardCode: z.string().trim().max(40).optional(),
   items: z
     .array(
       z.object({

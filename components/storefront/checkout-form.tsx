@@ -18,6 +18,7 @@ type FormValues = {
   customerPhone: string;
   customerEmail: string;
   paymentMethod: CheckoutInput["paymentMethod"];
+  giftCardCode?: string;
 };
 
 export function CheckoutForm({ settings }: { settings: PublicSettings }) {
@@ -32,6 +33,7 @@ export function CheckoutForm({ settings }: { settings: PublicSettings }) {
         customerPhone: true,
         customerEmail: true,
         paymentMethod: true,
+        giftCardCode: true,
       }),
     ),
     defaultValues: {
@@ -39,6 +41,7 @@ export function CheckoutForm({ settings }: { settings: PublicSettings }) {
       customerPhone: "",
       customerEmail: "",
       paymentMethod: "PAYSTACK",
+      giftCardCode: "",
     },
   });
 
@@ -59,6 +62,7 @@ export function CheckoutForm({ settings }: { settings: PublicSettings }) {
   async function onSubmit(values: FormValues) {
     const payload: CheckoutInput = {
       ...values,
+      giftCardCode: values.giftCardCode?.trim() || undefined,
       items: items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
     };
     setPending(true);
@@ -132,6 +136,10 @@ export function CheckoutForm({ settings }: { settings: PublicSettings }) {
             <Label htmlFor="customerEmail">Email</Label>
             <Input id="customerEmail" className="mt-2" type="email" {...form.register("customerEmail")} />
             <FieldError message={form.formState.errors.customerEmail?.message} />
+          </div>
+          <div>
+            <Label htmlFor="giftCardCode">Gift card</Label>
+            <Input id="giftCardCode" className="mt-2" {...form.register("giftCardCode")} placeholder="Optional" />
           </div>
         </section>
         <fieldset className="space-y-3">

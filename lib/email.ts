@@ -46,11 +46,20 @@ async function send(to: string, subject: string, html: string) {
   await resend.emails.send({ from, to, subject, html });
 }
 
-export async function sendPaidReceipt(order: MailOrder) {
+export async function sendOrderConfirmation(order: MailOrder, invoiceNumber?: string) {
+  const url = `${getSiteUrl()}/order/${order.id}`;
+  const html = shell(
+    "Order confirmed",
+    `<p style="font-family:Arial,sans-serif;line-height:1.6;">Thank you, ${escapeHtml(order.customerName)}. We have your order <strong>${escapeHtml(order.publicRef)}</strong>${invoiceNumber ? `. Invoice <strong>${escapeHtml(invoiceNumber)}</strong>` : ""}.</p><table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;">${itemRows(order)}<tr><td style="padding-top:16px;"><strong>Total</strong></td><td style="padding-top:16px;text-align:right;"><strong>${escapeHtml(formatNaira(order.totalAmount))}</strong></td></tr></table><p style="font-family:Arial,sans-serif;"><a href="${url}" style="color:#8a6a3d;">View your invoice</a></p>`,
+  );
+  await send(order.customerEmail, `Order ${order.publicRef} · Aurane`, html);
+}
+
+export async function sendPaidReceipt(order: MailOrder, receiptNumber?: string) {
   const url = `${getSiteUrl()}/order/${order.id}`;
   const html = shell(
     "Your receipt",
-    `<p style="font-family:Arial,sans-serif;line-height:1.6;">Thank you, ${escapeHtml(order.customerName)}. Order <strong>${escapeHtml(order.publicRef)}</strong> is paid.</p><table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;">${itemRows(order)}<tr><td style="padding-top:16px;"><strong>Total</strong></td><td style="padding-top:16px;text-align:right;"><strong>${escapeHtml(formatNaira(order.totalAmount))}</strong></td></tr></table><p style="font-family:Arial,sans-serif;"><a href="${url}" style="color:#8a6a3d;">View your order</a></p>`,
+    `<p style="font-family:Arial,sans-serif;line-height:1.6;">Thank you, ${escapeHtml(order.customerName)}. Order <strong>${escapeHtml(order.publicRef)}</strong> is paid${receiptNumber ? `. Receipt <strong>${escapeHtml(receiptNumber)}</strong>` : ""}.</p><table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;">${itemRows(order)}<tr><td style="padding-top:16px;"><strong>Total</strong></td><td style="padding-top:16px;text-align:right;"><strong>${escapeHtml(formatNaira(order.totalAmount))}</strong></td></tr></table><p style="font-family:Arial,sans-serif;"><a href="${url}" style="color:#8a6a3d;">View your receipt</a></p>`,
   );
   await send(order.customerEmail, `Receipt ${order.publicRef} · Aurane`, html);
 }
@@ -65,9 +74,15 @@ export async function notifyAdminOfOrder(order: MailOrder, note: string) {
   await send(to, `${note}: ${order.publicRef}`, html);
 }
 
-export async function sendOrderMailSafely(
-  task: () => Promise<void>,
-) {
+export async function sendMarketingEmail(to: string, subject: string, message: string) {
+  const html = shell(
+    subject,
+    `<p style="font-family:Arial,sans-serif;line-height:1.6;white-space:pre-wrap;">${escapeHtml(message)}</p>`,
+  );
+  await send(to, subject, html);
+}
+
+export async function sendOrderMailSafely(task: () => Promise<void>) {
   try {
     await task();
   } catch (error) {
