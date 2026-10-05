@@ -48,7 +48,7 @@ export default async function OrdersPage({
     db.product.findMany({
       where: { stockStatus: { not: "SOLD" }, stockQty: { gt: 0 } },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, stockQty: true },
+      select: { id: true, name: true, stockQty: true, images: true },
     }),
   ]);
 

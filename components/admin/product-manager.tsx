@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { toast } from "sonner";
 import { STOCK_LABELS, STOCK_STATUSES, type StockStatus } from "@/lib/constants";
 import { formatNaira, koboToNaira } from "@/lib/money";
@@ -75,15 +76,35 @@ export function ProductManager({ products }: { products: EditableProduct[] }) {
             {products.map((product) => (
               <TableRow key={product.id}>
                 <TableCell>
-                  <p className="font-medium">{product.name}</p>
-                  <p className="text-xs text-muted">
-                    {product.category} · {product.sizeMl}ml
-                    {product.color ? ` · ${product.color}` : ""}
-                    {product.texture ? ` · ${product.texture}` : ""}
-                  </p>
-                  {product.history?.length ? (
-                    <p className="mt-1 text-[11px] text-muted">{product.history[0]}</p>
-                  ) : null}
+                  <div className="flex items-center gap-3">
+                    <span className="relative h-16 w-12 shrink-0 overflow-hidden bg-[#f3ece3]">
+                      {product.images[0] ? (
+                        <Image
+                          src={product.images[0]}
+                          alt={product.name}
+                          fill
+                          unoptimized
+                          sizes="48px"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-full items-center justify-center font-serif text-lg text-ink/70">
+                          {product.name.slice(0, 1)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="min-w-0">
+                      <p className="font-medium">{product.name}</p>
+                      <p className="text-xs text-muted">
+                        {product.category} · {product.sizeMl}ml
+                        {product.color ? ` · ${product.color}` : ""}
+                        {product.texture ? ` · ${product.texture}` : ""}
+                      </p>
+                      {product.history?.length ? (
+                        <p className="mt-1 text-[11px] text-muted">{product.history[0]}</p>
+                      ) : null}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <input
